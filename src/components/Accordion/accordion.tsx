@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/rules-of-hooks */
 import type { ReactNode } from 'react'
@@ -140,7 +141,7 @@ Accordion.Trigger = ({ children }: { children: ReactNode }) => {
 			registerTrigger(itemId, buttonRef.current)
 		}
 		return () => { unregisterTrigger(itemId) }
-	}, []);
+	}, [itemId, registerTrigger, unregisterTrigger]);
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		switch (e.key) {
@@ -183,6 +184,7 @@ Accordion.Panel = ({ children }: { children: ReactNode }) => {
 	const contentRef = React.useRef<HTMLDivElement>(null);
 	const [height, setHeight] = React.useState<number | undefined>(isExpanded ? undefined : 0)
 
+	// Handle expand/collapse animation
 	React.useEffect(() => {
 		if (!contentRef.current) return;
 
@@ -209,6 +211,23 @@ Accordion.Panel = ({ children }: { children: ReactNode }) => {
 			})
 		}
 	}, [isExpanded])
+
+	// Handle content size changes while expanded
+	React.useEffect(() => {
+		if (!isExpanded || !contentRef.current) return;
+
+		const resizeObserver = new ResizeObserver((_) => {
+			// Onl update if we're in "auto" mode (animation complete)
+			if (height === undefined) {
+				// Content changed, but we're already at auto height
+				// No action needed - auto handles it
+			}
+		});
+
+		resizeObserver.observe(contentRef.current);
+
+		return () => resizeObserver.disconnect();
+	}, [isExpanded, height])
 
 	return (
 		<div
