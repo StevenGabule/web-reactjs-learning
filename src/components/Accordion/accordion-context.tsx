@@ -4,6 +4,10 @@ type AccordionContextType = {
 	expandedItems: Set<string>;
 	toggleItem: (id: string) => void;
 	allowMultiple: boolean;
+
+	registerTrigger: (id: string, ref: HTMLButtonElement) => void;
+	unregisterTrigger: (id: string) => void;
+	focusTrigger: (direction: 'next' | 'prev' | 'first' | 'last', current: string) => void;
 }
 
 type AccordionItemContextType = {

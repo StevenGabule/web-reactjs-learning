@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/rules-of-hooks */
 import type { ReactNode } from 'react'
 import React from 'react';
@@ -7,34 +8,98 @@ import { ChevronDown, ChevronLeft } from 'lucide-react';
 type AccordionProps = {
 	children: ReactNode;
 	allowMultiple?: boolean;
-	defaultExpanded?: string[]
+	defaultExpanded?: string[];
+
+	expandedItems?: string[];
+	expandedChange?: (items: string[]) => void;
 }
 
 export const Accordion = ({
 	children,
 	allowMultiple = false,
-	defaultExpanded
+	defaultExpanded,
+	expandedChange,
+	expandedItems
 }: AccordionProps) => {
-	const [expandedItems, setExpandedItems] = React.useState(() => new Set(defaultExpanded));
+	const [internalItems, setInternalItems] = React.useState(() => new Set(defaultExpanded));
+	const triggerRefs = React.useRef<Map<string, HTMLButtonElement>>(new Map())
+
+	const isControlled = expandedItems !== undefined;
+	const expanded = isControlled ? new Set(expandedItems) : internalItems;
+
 	const toggleItem = React.useCallback((id: string) => {
-		setExpandedItems(prev => {
-			const next = new Set(prev);
+		if (isControlled) {
+			// Controlled mode: call the callback
+			const next = new Set(expanded);
 			if (next.has(id)) {
 				next.delete(id);
 			} else {
 				if (!allowMultiple) {
-					next.clear()
+					next.clear();
 				}
 				next.add(id)
 			}
+			expandedChange?.(Array.from(next));
+		} else {
+			// Uncontrolled mode: update internal state
+			setInternalItems(prev => {
+				const next = new Set(prev);
+				if (next.has(id)) {
+					next.delete(id);
+				} else {
+					if (!allowMultiple) {
+						next.clear()
+					}
+					next.add(id)
+				}
+				return next;
+			});
+		}
+	}, [allowMultiple, expanded, expandedChange, isControlled]);
 
-			return next;
-		})
-	}, [allowMultiple])
+	const registerTrigger = React.useCallback((id: string, ref: HTMLButtonElement) => {
+		triggerRefs.current.set(id, ref)
+	}, [])
+
+	const unregisterTrigger = React.useCallback((id: string) => {
+		triggerRefs.current.delete(id)
+	}, [])
+
+	const focusTrigger = React.useCallback((direction: 'next' | 'prev' | 'first' | 'last', currentId: string) => {
+		const triggers = Array.from(triggerRefs.current.entries());
+		const currentIndex = triggers.findIndex(([id]) => id === currentId);
+
+		let targetIndex: number;
+
+		switch (direction) {
+			case 'first':
+				targetIndex = 0;
+				break;
+			case 'last':
+				targetIndex = triggers.length - 1;
+				break;
+			case 'next':
+				targetIndex = (currentIndex + 1) % triggers.length;
+				break;
+			case 'prev':
+				targetIndex = (currentIndex - 1 + triggers.length) % triggers.length;
+				break;
+		}
+
+		triggers[targetIndex]?.[1].focus();
+
+	}, [])
 
 	const value = React.useMemo(
-		() => ({ expandedItems, toggleItem, allowMultiple }),
-		[expandedItems, toggleItem, allowMultiple])
+		() => ({
+			expandedItems: expanded,
+			toggleItem,
+			allowMultiple,
+			registerTrigger,
+			unregisterTrigger,
+			focusTrigger,
+		}),
+		[expanded, toggleItem, allowMultiple, registerTrigger, unregisterTrigger, focusTrigger])
 
 	return (
 		<AccordionContext.Provider value={value}>
@@ -66,12 +131,43 @@ Accordion.Item = ({ children, id }: AccordionItemProps) => {
 }
 
 Accordion.Trigger = ({ children }: { children: ReactNode }) => {
-	const { toggleItem } = useAccordion()
+	const { toggleItem, registerTrigger, unregisterTrigger, focusTrigger } = useAccordion()
 	const { itemId, isExpanded } = useAccordionItem();
+	const buttonRef = React.useRef<HTMLButtonElement>(null)
+
+	React.useEffect(() => {
+		if (buttonRef.current) {
+			registerTrigger(itemId, buttonRef.current)
+		}
+		return () => { unregisterTrigger(itemId) }
+	}, []);
+
+	const handleKeyDown = (e: React.KeyboardEvent) => {
+		switch (e.key) {
+			case 'ArrowDown':
+				e.preventDefault();
+				focusTrigger('next', itemId)
+				break;
+			case 'ArrowUp':
+				e.preventDefault();
+				focusTrigger('prev', itemId)
+				break;
+			case 'Home':
+				e.preventDefault();
+				focusTrigger('first', itemId)
+				break;
+			case 'End':
+				e.preventDefault();
+				focusTrigger('last', itemId)
+				break;
+		}
+	}
 
 	return (
 		<button
+			ref={buttonRef}
 			onClick={() => toggleItem(itemId)}
+			onKeyDown={handleKeyDown}
 			aria-expanded={isExpanded}
 			aria-controls={`panel-${itemId}`}
 			id={`trigger-${itemId}`}
@@ -84,14 +180,50 @@ Accordion.Trigger = ({ children }: { children: ReactNode }) => {
 
 Accordion.Panel = ({ children }: { children: ReactNode }) => {
 	const { itemId, isExpanded } = useAccordionItem();
+	const contentRef = React.useRef<HTMLDivElement>(null);
+	const [height, setHeight] = React.useState<number | undefined>(isExpanded ? undefined : 0)
+
+	React.useEffect(() => {
+		if (!contentRef.current) return;
+
+		if (isExpanded) {
+			const contentHeight = contentRef.current.scrollHeight;
+			setHeight(contentHeight)
+
+			// After animation completes, set to auto for dynamic content
+			const timer = setTimeout(() => {
+				setHeight(undefined);
+			}, 300)
+
+			return () => clearTimeout(timer);
+		} else {
+			// First set to current height then to 0
+			const contentHeight = contentRef.current.scrollHeight;
+			setHeight(contentHeight)
+
+			// Use requestAnimationFrame to ensure the browser registers the height before animating to 0
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					setHeight(0)
+				})
+			})
+		}
+	}, [isExpanded])
+
 	return (
 		<div
 			id={`panel-${itemId}`}
 			role="region"
 			aria-labelledby={`trigger-${itemId}`}
-			hidden={!isExpanded}
+			style={{
+				height: height === undefined ? 'auto' : height,
+				overflow: 'hidden',
+				transition: 'height 300ms ease-out'
+			}}
 		>
-			{isExpanded && children}
+			<div ref={contentRef}>
+				{children}
+			</div>
 		</div>
 	)
 }
