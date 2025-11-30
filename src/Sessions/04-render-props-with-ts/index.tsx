@@ -124,5 +124,74 @@ export function VirtualList<T>({
 	)
 }
 
+type FormErrors<T> = Partial<Record<keyof T, string>>;
+
+type FormRenderProps<T> = {
+	values: T,
+	errors: FormErrors<T>;
+	handleChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+	handleSubmit: (e: React.FormEvent) => void;
+};
+
+type FormProps<T> = {
+	initialValues: T;
+	children: (props: FormRenderProps<T>) => ReactNode;
+	validate?: (values: T) => FormErrors<T>;
+}
+
+type LoginForm = { email: string; password: string };
+
+function Form<T extends Record<string, unknown>>({
+	initialValues,
+	children,
+	validate
+}: FormProps<T>) {
+	const [values, setValues] = React.useState<T>(initialValues)
+	const [errors, setErrors] = React.useState<FormErrors<T>>({});
+
+	const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const { name, value } = e.target;
+		setValues(prev => ({ ...prev, [name]: value }))
+	}
+
+	const handleSubmit = () => {
+		if (validate) {
+			const validateErrors = validate(values);
+			setErrors(validateErrors);
+		}
+	}
+
+	// Render props: call children as a function!
+	return <>{children({ values, errors, handleChange, handleSubmit })}</>
+}
+
+const validateLogin = (values: LoginForm): Partial<Record<keyof LoginForm, string>> => {
+	const errors: Partial<Record<keyof LoginForm, string>> = {}
+	if (!values.email) errors.email = 'Email is required';
+	if (!values.password) errors.password = 'Password is required';
+
+	return errors;
+}
+
+export const BuildForm = () => {
+	return (
+		<Form<LoginForm>
+			initialValues={{ email: '', password: '' }}
+			validate={validateLogin}
+		>
+			{({ values, errors, handleChange, handleSubmit }) => (
+				<form onSubmit={handleSubmit}>
+					<input
+						name="email"
+						value={values.email}  // Typed!
+						onChange={handleChange}
+					/>
+					{errors.email && <span>{errors.email}</span>}
+					<button type="submit">Submit</button>
+				</form>
+			)}
+		</Form>
+	)
+}
 
 
