@@ -1,7 +1,8 @@
 import './App.css'
-import { MouseTracker } from './components/MouseTracker/mouse-tracker'
+import { UseInViewport } from './components/MouseTracker/viewport'
 
 export default function App() {
+  const { ref, isInView } = UseInViewport({ threshold: 0.5 })
   return (
     <>
       {/* <h4>Accordion Controlled</h4>
@@ -23,7 +24,7 @@ export default function App() {
           pointerEvents: 'none'
         }} />} */}
       {/* </MouseTracker> */}
-      <MouseTracker>
+      {/* <MouseTracker>
         {({ x, y }) => {
           const hue = (x / window.innerWidth) * 360;
           const lightness = (y / window.innerHeight) * 100;
@@ -35,7 +36,11 @@ export default function App() {
             }} />
           )
         }}
-      </MouseTracker>
+      </MouseTracker> */}
+
+      <div ref={ref}>
+        {isInView ? 'Visible' : 'Not Invisible'}
+      </div>
     </>
   )
 }
