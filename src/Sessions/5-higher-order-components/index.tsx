@@ -380,3 +380,25 @@ function Card({ title, children, theme }: CardProps) {
 }
 
 export const ThemeCard = withTheme(Card);
+
+
+// Composing Multiple HOCs
+// You can stack HOCs together:
+function composeHOCs<P extends object>(...hocs: Array<(component: ComponentType<any>) => ComponentType<any>>) {
+	return (BaseComponent: ComponentType<P>) => {
+		return hocs.reduceRight(
+			(acc, hoc) => hoc(acc),
+			BaseComponent
+		)
+	}
+}
+
+const enhance = composeHOCs(
+	withAuth,
+	withTheme,
+	// @ts-expect-error ignore
+	withErrorBoundary
+)
+
+// @ts-expect-error ignore
+export const SuperComponent = enhance(BaseComponent);
