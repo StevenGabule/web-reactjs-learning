@@ -105,9 +105,11 @@ export function TestApp() {
 	const [isLoading, setIsLoading] = React.useState(true);
 
 	React.useEffect(() => {
+		// @ts-expect-error error
 		fetchUsers().then(data => {
 			setUsers(data);
 			setIsLoading(false)
+			// @ts-expect-error error
 		}).catch(err => {
 			console.log(err)
 			setIsLoading(false)
@@ -258,8 +260,7 @@ export const UserCard = import.meta.env.NODE_ENV === 'development'
 	? withLogger(UserCardBase, { logRenders: true, logProps: true }) : UserCardBase;
 
 
-// 4. withPermissions - Role-Based Access Control
-// Control what users can see based on their permissions:
+// 4. withPermissions - Role-Based Access Control - Control what users can see based on their permissions:
 const useCurrentUser = () => {
 	return {
 		permissions: ['read', 'write']
@@ -330,3 +331,52 @@ export function UserRow({ user }: { user: User }) {
 		</tr>
 	)
 }
+
+// 5. withTheme - Theme Injection - Inject theme context into components (pre-hooks pattern):
+
+// @ts-expect-error error
+import { ThemeContext, Theme } from './ThemeContext';
+
+interface WithThemeProps {
+	theme: Theme;
+	toggleTheme: () => void;
+}
+
+function withTheme<P extends WithThemeProps>(WrappedComponent: ComponentType<P>) {
+	return function ThemeComponent(
+		props: Omit<P, keyof WithThemeProps>
+	) {
+		return (
+			<ThemeContext.Consumer>
+				{(themeContext: any) => (
+					<WrappedComponent
+						{...(props as P)}
+						theme={themeContext.theme}
+						toggleTheme={themeContext.toggleTheme}
+					/>
+				)}
+			</ThemeContext.Consumer>
+		)
+	}
+}
+
+// Usage
+interface CardProps extends WithThemeProps {
+	title: string;
+	children: ReactNode;
+}
+
+function Card({ title, children, theme }: CardProps) {
+	return (
+		<div style={{
+			background: theme.colors.cardBackground,
+			color: theme.colors.text,
+			padding: theme.spacing.medium
+		}}>
+			<h3>{title}</h3>
+			{children}
+		</div>
+	)
+}
+
+export const ThemeCard = withTheme(Card);
