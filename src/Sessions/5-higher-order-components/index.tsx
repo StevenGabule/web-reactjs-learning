@@ -1,0 +1,258 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+/* eslint-disable react-refresh/only-export-components */
+import type { ComponentType } from 'react';
+import React, { Component } from 'react';
+
+// Basic HOC structure
+export function withEnhancements<P extends object>(WrappedComponent: ComponentType<P>) {
+	return function Enhancement(props: P) {
+		return <WrappedComponent {...props} />
+	}
+}
+
+type User = {
+	id: number;
+	name: string;
+	email: string
+}
+
+type AuthProps = {
+	isAuthenticated: boolean;
+	user: User | null
+}
+
+const useAuth = () => {
+	return {
+		isLoading: false,
+		user: null,
+		isAuthenticated: false
+	}
+}
+
+export function withAuth<P extends object>(WrapperComponent: ComponentType<P & AuthProps>) {
+	return function AuthenticateComponent(props: Omit<P, keyof AuthProps>) {
+		const { isLoading, user, isAuthenticated } = useAuth();
+
+		if (isLoading) {
+			return 'Loading..'
+		}
+
+		if (!isAuthenticated) {
+			return 'Display Login Component'
+		}
+
+		return <WrapperComponent {...(props as P)} user={user} isAuthenticated={isAuthenticated} />
+	}
+}
+
+type DashboardProps = {
+	id: number;
+	page: number;
+}
+
+function Dashboard({ user }: AuthProps & DashboardProps) {
+	return <h1>Welcome! {user?.name}</h1>
+}
+
+withAuth(Dashboard);
+
+
+// Practical Examples & Use Cases
+
+// 1. withLoading - Data Fetching States
+// One of the most common patterns: handling loading states consistently across your app.
+interface WithLoadingProps {
+	isLoading: boolean;
+}
+
+function withLoading<P extends object>(
+	WrapperComponent: ComponentType<P>,
+	LoadingComponent: ComponentType = () => <div>Loading...</div>
+) {
+	return function WithLoadingComponent(
+		props: P & WithLoadingProps
+	) {
+		const { isLoading, ...restProps } = props;
+		if (isLoading) {
+			return <LoadingComponent />
+		}
+
+		return <WrapperComponent {...(restProps as P)} />
+	}
+}
+
+// Usage
+interface UserListProps {
+	users: User[];
+}
+
+function UserList({ users }: UserListProps) {
+	return (
+		<ul>
+			{users.map(user => (
+				<li key={user.id}>{user.name}</li>
+			))}
+		</ul>
+	)
+}
+
+
+const UserListWithLoading = withLoading(UserList);
+
+export function TestApp() {
+	const [users, setUsers] = React.useState<User[]>([]);
+	const [isLoading, setIsLoading] = React.useState(true);
+
+	React.useEffect(() => {
+		fetchUsers().then(data => {
+			setUsers(data);
+			setIsLoading(false)
+		}).catch(err => {
+			console.log(err)
+			setIsLoading(false)
+		})
+	}, []);
+
+	return <UserListWithLoading users={users} isLoading={isLoading} />
+}
+
+// 2. withErrorBoundary - Error Handling
+// Wrap components with error catching capability:
+interface ErrorBoundaryState {
+	hasError: boolean;
+	error: Error | null;
+}
+
+interface FallbackProps {
+	error: Error | null;
+	resetError: () => void;
+}
+
+export function withErrorBoundary<P extends object>(
+	WrappedComponent: ComponentType<P>,
+	FallbackComponent: ComponentType<FallbackProps>
+) {
+	return class ErrorBoundaryWrapper extends Component<P, ErrorBoundaryState> {
+		static displayName = `withErrorBoundary(${WrappedComponent.displayName || WrappedComponent.name || 'Component'
+			})`;
+
+		state: ErrorBoundaryState = {
+			hasError: false,
+			error: null
+		};
+
+		static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+			return { hasError: true, error }
+		}
+
+		componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+			// Log to error reporting service
+			console.error('Component error:', error, errorInfo);
+		}
+
+		resetError = () => {
+			this.setState({ hasError: false, error: null })
+		}
+
+		render() {
+			if (this.state.hasError) {
+				return <FallbackComponent
+					error={this.state.error}
+					resetError={this.resetError}
+				/>
+			}
+
+			return <WrappedComponent {...this.props} />
+		}
+	}
+}
+
+function ErrorFallback({ error, resetError }: FallbackProps) {
+	return (
+		<div className="error-container">
+			<h2>Something went wrong!</h2>
+			<p>{error?.message}</p>
+			<button onClick={resetError}>Try again!</button>
+		</div>
+	)
+}
+
+function RiskyComponent({ data }: { data: any }) {
+	// This might throw an error
+	return <div>{data.nested.value}</div>
+}
+
+
+export const SafeRiskyComponent = withErrorBoundary(RiskyComponent, ErrorFallback);
+
+// 3. withLogger - Development & Debugging
+// Track component lifecycle and prop changes:
+interface LoggerOptions {
+	logProps?: boolean;
+	logRenders?: boolean;
+	logMounts?: boolean;
+}
+
+function withLogger<P extends object>(
+	WrappedComponent: ComponentType<P>,
+	options: LoggerOptions = {}
+) {
+	const { logProps = true, logRenders = true, logMounts = true } = options;
+	const componentName = WrappedComponent.displayName || WrappedComponent.name || 'Component';
+	return function LoggerComponent(props: P) {
+		const renderCount = React.useRef(0);
+		const prevProps = React.useRef<P>(null);
+
+		React.useEffect(() => {
+			if (logMounts) {
+				console.log(`[${componentName}] Mounted`);
+			}
+
+			return () => {
+				if (logMounts) {
+					console.log(`[${componentName}] Unmounted`)
+				}
+			}
+		}, [])
+
+		React.useEffect(() => {
+			if (logProps && prevProps.current) {
+				const changes = getChangedProps(prevProps.current, props);
+				if (Object.keys(changes).length > 0) {
+					console.log(`[${componentName}] Props changed: ${changes}`);
+				}
+			}
+			prevProps.current = props;
+		});
+
+		if (logRenders) {
+			renderCount.current += 1;
+			console.log(`[${componentName}] Render #${renderCount.current}`)
+		}
+
+		return <WrappedComponent {...props} />
+	}
+};
+
+function getChangedProps<P extends object>(prev: P, current: P): Partial<P> {
+	const changes: Partial<P> = {};
+
+	Object.keys(current).forEach((key) => {
+		if (prev[key as keyof P] !== current[key as keyof P]) {
+			changes[key as keyof P] = current[key as keyof P];
+		}
+	})
+
+	return changes;
+}
+
+function UserCardBase() {
+	return (
+		<h1>User Card Info</h1>
+	)
+}
+
+// Usage (only in development)
+export const UserCard = import.meta.env.NODE_ENV === 'development'
+	? withLogger(UserCardBase, { logRenders: true, logProps: true }) : UserCardBase;
