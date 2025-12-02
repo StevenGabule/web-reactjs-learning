@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /* eslint-disable react-refresh/only-export-components */
@@ -402,3 +403,55 @@ const enhance = composeHOCs(
 
 // @ts-expect-error ignore
 export const SuperComponent = enhance(BaseComponent);
+
+interface AnalyticsConfig {
+	screenName: string;
+	trackProps?: string[]
+}
+
+interface AnalyticsConfig {
+	screenName: string;
+	trackProps?: string[];
+}
+
+function withAnalytics<P extends object>(
+	WrappedComponent: ComponentType<P>,
+	config: AnalyticsConfig
+) {
+	return function AnalyticsComponent(props: P) {
+		const { screenName, trackProps = [] } = config;
+
+		React.useEffect(() => {
+			// Track screen view
+			// @ts-expect-error error
+			analytics.trackScreen(screenName);
+		}, []);
+
+		React.useEffect(() => {
+			// Track specific prop changes
+			const trackedData = trackProps.reduce((acc, propName) => {
+				if (propName in props) {
+					acc[propName] = props[propName as keyof P];
+				}
+				return acc;
+			}, {} as Record<string, unknown>);
+
+			if (Object.keys(trackedData).length > 0) {
+				// @ts-expect-error error
+				analytics.trackEvent('prop_change', {
+					screen: screenName,
+					...trackedData,
+				});
+			}
+		}, trackProps.map(p => props[p as keyof P]));
+
+		return <WrappedComponent {...props} />;
+	};
+}
+
+// Usage
+// @ts-expect-error error
+const TrackedCheckout = withAnalytics(CheckoutPage, {
+	screenName: 'Checkout',
+	trackProps: ['cartTotal', 'itemCount'],
+});
