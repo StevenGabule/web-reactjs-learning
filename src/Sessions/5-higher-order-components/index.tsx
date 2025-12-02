@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /* eslint-disable react-refresh/only-export-components */
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import React, { Component } from 'react';
 
 // Basic HOC structure
@@ -256,3 +256,77 @@ function UserCardBase() {
 // Usage (only in development)
 export const UserCard = import.meta.env.NODE_ENV === 'development'
 	? withLogger(UserCardBase, { logRenders: true, logProps: true }) : UserCardBase;
+
+
+// 4. withPermissions - Role-Based Access Control
+// Control what users can see based on their permissions:
+const useCurrentUser = () => {
+	return {
+		permissions: ['read', 'write']
+	}
+}
+
+type Permission = 'read' | 'write' | 'delete' | 'admin';
+
+interface WithPermissionsConfig {
+	requiredPermissions: Permission[];
+	fallback?: ReactNode;
+	requireAll?: boolean;
+}
+
+function withPermission<P extends object>(
+	WrappedComponent: ComponentType<P>,
+	config: WithPermissionsConfig
+) {
+	const {
+		requiredPermissions,
+		fallback = null,
+		requireAll = true
+	} = config;
+
+	return function PermissionGatedComponent(props: P) {
+		const { permissions } = useCurrentUser();
+
+		const hasPermission = requireAll
+			? requiredPermissions.every(p => permissions.includes(p))
+			: requiredPermissions.some(p => permissions.includes(p));
+
+		if (!hasPermission) {
+			return <>{fallback}</>
+		}
+
+		return <WrappedComponent {...props} />
+	}
+}
+
+// Usage
+function DeleteButton({ onDelete }: { onDelete: () => void }) {
+	return (
+		<button onClick={onDelete} className='danger'>
+			Delete
+		</button>
+	)
+}
+
+const AdminDeleteButton = withPermission(DeleteButton, {
+	requiredPermissions: ['delete', 'admin'],
+	requireAll: false, // Either permission works
+	fallback: <span>No permission to delete</span>
+});
+
+export function UserRow({ user }: { user: User }) {
+
+	const deleteUser = (id: number) => {
+		console.error(id);
+	}
+
+	return (
+		<tr>
+			<td>{user.name}</td>
+			<td>{user.email}</td>
+			<td>
+				<AdminDeleteButton onDelete={() => deleteUser(user.id)} />
+			</td>
+		</tr>
+	)
+}
